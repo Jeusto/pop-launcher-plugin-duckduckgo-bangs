@@ -161,66 +161,61 @@ impl App {
     /// Searches the bangs database with the given query.
     /// The search results are then sent out as a plugin response and stored as one of the queries.
     fn search(&mut self, query: String) {
-        // Only proceed if the search query is prefixed with a certain character.
-        if let Some(search) = query.strip_prefix(PLUGIN_PREFIX) {
-            // Set the search metadata right after the plugin is enabled.
-            // This is just to make input processing easier.
-            self.search = search.split_whitespace().map(|q| q.to_string()).collect();
+        self.search = query.split_whitespace().map(|q| q.to_string()).collect();
 
-            // We're just going to base our search from the last bang since it is the most
-            // practical way to do so.
-            // It will also do its work when the last part of the query is a bang to not let the
-            // plugin take more than what it needs.
-            // We'll figure how to make it smarter by giving responses to recent edits later.
-            if let Some(query) = self
-                .search
-                .last()
-                .unwrap_or(&String::new())
-                .strip_prefix(BANG_INDICATOR)
-            {
-                let query = query.to_lowercase();
+        // We're just going to base our search from the last bang since it is the most
+        // practical way to do so.
+        // It will also do its work when the last part of the query is a bang to not let the
+        // plugin take more than what it needs.
+        // We'll figure how to make it smarter by giving responses to recent edits later.
+        if let Some(query) = self
+            .search
+            .last()
+            .unwrap_or(&String::new())
+            .strip_prefix(BANG_INDICATOR)
+        {
+            let query = query.to_lowercase();
 
-                // Making the standard output accessible in the closure of the following block.
-                let mut out = &self.out;
+            // Making the standard output accessible in the closure of the following block.
+            let mut out = &self.out;
 
-                // Getting a new hashmap for the results.
-                // Until we can find an elegant way to just use the original map, this will do for now.
-                let mut results = HashMap::new();
-                let mut id = 0;
+            // Getting a new hashmap for the results.
+            // Until we can find an elegant way to just use the original map, this will do for now.
+            let mut results = HashMap::new();
+            let mut id = 0;
 
-                self.cache
-                    .iter()
-                    .filter(|(_trigger, item)| item.contains(&query))
-                    .filter_map(|(trigger, _item)| self.db.get(trigger))
-                    .take(self.config.max_limit as usize)
-                    .for_each(|bang| {
-                        // This also doubles as a counter.
-                        id += 1;
+            self.cache
+                .iter()
+                .filter(|(_trigger, item)| item.contains(&query))
+                .filter_map(|(trigger, _item)| self.db.get(trigger))
+                .take(self.config.max_limit as usize)
+                .for_each(|bang| {
+                    // This also doubles as a counter.
+                    id += 1;
 
-                        utils::send(
-                            &mut out,
-                            PluginResponse::Append(PluginSearchResult {
-                                id: id as u32,
-                                name: bang.name(),
-                                description: bang.description(),
-                                ..Default::default()
-                            }),
-                        );
+                    utils::send(
+                        &mut out,
+                        PluginResponse::Append(PluginSearchResult {
+                            id: id as u32,
+                            name: bang.name(),
+                            description: bang.description(),
+                            ..Default::default()
+                        }),
+                    );
 
-                        results.insert(id, bang.trigger.clone());
-                    });
+                    results.insert(id, bang.trigger.clone());
+                });
 
-                // Send an extra launcher item if there's no search result.
-                // We'll just reuse the `id` variable for this.
-                // Take note we need to make a launcher item to make activation event possible.
-                if id == 0 {
-                    self.send_empty_launcher_item();
-                }
-
-                self.results = results;
-            } else {
+            // Send an extra launcher item if there's no search result.
+            // We'll just reuse the `id` variable for this.
+            // Take note we need to make a launcher item to make activation event possible.
+            if id == 0 {
                 self.send_empty_launcher_item();
             }
+
+            self.results = results;
+        } else {
+            self.send_empty_launcher_item();
         }
 
         utils::send(&mut self.out, PluginResponse::Finished);
